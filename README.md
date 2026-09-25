@@ -21,41 +21,7 @@
 
 ## End-to-End Architecture & Medallion Data Flow
 
-```text
-                           ┌──────────────────────────────┐
-                           │       Source Data            │
-                           │                              │
-                           │ Orders                       │
-                           │ Shipments                    │
-                           │ Returns                      │
-                           │ Products / Customers / etc.  │
-                           └──────────────┬───────────────┘
-                                          │
-                                          │ Raw Files
-                                          ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                         Azure Data Lake Storage Gen2                         │
-│                                                                              │
-│  ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐   │
-│  │     BRONZE      │──────▶│     SILVER      │──────▶│      GOLD       │   │
-│  │                 │       │                 │       │                 │   │
-│  │ Raw ingestion   │       │ Cleaned data    │       │ Dimensional     │   │
-│  │ Auto Loader     │       │ Deduplication   │       │ model           │   │
-│  │ Schema tracking │       │ Enrichment      │       │ SCD Type 1      │   │
-│  │ _rescued_data   │       │ CDF enabled     │       │ Incremental     │   │
-│  └─────────────────┘       └─────────────────┘       └────────┬────────┘   │
-│                                                               │            │
-└───────────────────────────────────────────────────────────────┼────────────┘
-                                                                │
-                                                                ▼
-                                                    ┌─────────────────────┐
-                                                    │      Power BI       │
-                                                    │                     │
-                                                    │ Revenue Performance │
-                                                    │ Delivery SLAs       │
-                                                    │ Return Patterns     │
-                                                    └─────────────────────┘
-```
+
 
 > **Pipeline Screenshot**  
 > `docs/screenshots/pipeline_overview.png`
@@ -313,14 +279,6 @@ SET TBLPROPERTIES (
 
 Gold processing consumes Silver Delta Change Data Feed records incrementally.
 
-Only relevant changes are processed:
-
-```text
-_change_type IN (
-    'insert',
-    'update_postimage'
-)
-```
 
 The pipeline uses:
 
@@ -345,160 +303,15 @@ The pipeline uses:
 
 ### 1. Bronze Ingestion with Auto Loader
 
-```python
-from pyspark.sql import functions as F
 
-source_path = (
-    "abfss://bronze@<storage-account>.dfs.core.windows.net/orders/"
-)
-
-schema_location = (
-    "abfss://bronze@<storage-account>.dfs.core.windows.net/"
-    "_schemas/orders/"
-)
-
-checkpoint_location = (
-    "abfss://bronze@<storage-account>.dfs.core.windows.net/"
-    "_checkpoints/orders/"
-)
-
-bronze_df = (
-    spark.readStream
-        .format("cloudFiles")
-        .option("cloudFiles.format", "csv")
-        .option("cloudFiles.inferColumnTypes", "true")
-        .option("cloudFiles.schemaLocation", schema_location)
-        .option("rescuedDataColumn", "_rescued_data")
-        .option("header", "true")
-        .load(source_path)
-)
-
-(
-    bronze_df.writeStream
-        .format("delta")
-        .option("checkpointLocation", checkpoint_location)
-        .outputMode("append")
-        .toTable("bronze.orders")
-)
-```
 
 ### 2. Silver-to-Gold CDF Processing
 
-CDF records are read incrementally from Silver instead of repeatedly scanning the complete historical dataset.
 
-```python
-from pyspark.sql import functions as F
-
-cdf_df = (
-    spark.readStream
-        .format("delta")
-        .option("readChangeFeed", "true")
-        .option("startingVersion", starting_version)
-        .table("silver.order_shipments")
-        .filter(
-            F.col("_change_type").isin(
-                "insert",
-                "update_postimage"
-            )
-        )
-)
-```
 
 ### 3. SCD Type 1 `MERGE` with `foreachBatch`
 
-```python
-from delta.tables import DeltaTable
 
-target = DeltaTable.forName(
-    spark,
-    "gold.fact_order_shipments"
-)
-
-def upsert_batch(microBatchDf, batch_id):
-
-    # Prevent multiple source records from matching
-    # the same target row during MERGE.
-    deduped_df = (
-        microBatchDf
-        .dropDuplicates([
-            "order_id",
-            "shipment_id",
-            "order_dt"
-        ])
-    )
-
-    (
-        target.alias("target")
-        .merge(
-            deduped_df.alias("source"),
-            """
-            target.order_id = source.order_id
-            AND target.shipment_id = source.shipment_id
-            AND target.order_dt = source.order_dt
-            """
-        )
-        .whenMatchedUpdateAll()
-        .whenNotMatchedInsertAll()
-        .execute()
-    )
-
-
-query = (
-    cdf_df.writeStream
-        .foreachBatch(upsert_batch)
-        .option(
-            "checkpointLocation",
-            "abfss://gold@<storage-account>.dfs.core.windows.net/"
-            "_checkpoints/fact_order_shipments/"
-        )
-        .trigger(availableNow=True)
-        .start()
-)
-
-query.awaitTermination()
-```
-
-### Engineering Mitigations
-
-#### Multiple Source Row Matching
-
-Delta Lake can reject a `MERGE` when multiple source records match the same target row.
-
-The pipeline mitigates this within every micro-batch:
-
-```python
-microBatchDf.dropDuplicates([
-    "order_id",
-    "shipment_id",
-    "order_dt"
-])
-```
-
-This addresses:
-
-```text
-[DELTA_MULTIPLE_SOURCE_ROW_MATCHING_TARGET_ROW]
-```
-
-#### Partition Pruning
-
-The `order_dt` predicate is included in the merge condition:
-
-```sql
-target.order_dt = source.order_dt
-```
-
-This allows Delta to prune irrelevant date partitions instead of evaluating the entire target table.
-
-```text
-Source order_dt
-      │
-      ▼
-Relevant order_dt partition
-      │
-      ▼
-MERGE
-```
 
 #### `availableNow=True`
 
@@ -604,156 +417,12 @@ This reduces unnecessary compute runtime for workloads that do not require conti
 
 Power BI consumes the **Gold Delta tables** to provide analytical reporting across three primary domains.
 
-### Revenue Performance
 
-Uses `fact_order_items` and product/category dimensions for:
 
-- Revenue trends.
-- Product-level performance.
-- Category-level analysis.
-- Discount analysis.
-- Order-item metrics.
-- Time-based revenue analysis using `dim_date`.
-
-### Carrier Delivery SLAs
-
-Uses `fact_order_shipments` and date dimensions for:
-
-- Carrier-level shipment analysis.
-- Domestic vs. International carrier grouping.
-- Order-date trends.
-- Delivery SLA monitoring.
-- Carrier performance comparisons.
-
-### Product Return Patterns
-
-Uses `fact_order_returns` with product, category, and date dimensions for:
-
-- Return volumes.
-- Refund amounts.
-- Product-level return patterns.
-- Category-level return analysis.
-- Return turnaround windows.
-- Time-based return trends.
-
-### Dashboard Architecture
-
-```text
-                  Power BI
-                     │
-          ┌──────────┼───────────┐
-          │          │           │
-          ▼          ▼           ▼
-      Revenue      Carrier      Returns
-    Performance      SLA        Patterns
-          │          │           │
-          └──────────┼───────────┘
-                     │
-                     ▼
-              Gold Lakehouse
-                     │
-       ┌─────────────┼─────────────┐
-       ▼             ▼             ▼
-   Fact Tables    Dimensions    Dim Date
-```
 
 > **Power BI Dashboard Screenshot**  
 > `docs/screenshots/dashboard_overview.png`
 
 ---
 
-## Repository Structure
 
-```text
-shopvista-lakehouse/
-│
-├── README.md
-│
-├── architecture/
-│   ├── architecture-diagram.drawio
-│   ├── data-flow.md
-│   └── security-architecture.md
-│
-├── notebooks/
-│   │
-│   ├── bronze/
-│   │   ├── 01_bronze_orders_autoloader.py
-│   │   ├── 02_bronze_shipments_autoloader.py
-│   │   ├── 03_bronze_returns_autoloader.py
-│   │   └── 04_bronze_master_data.py
-│   │
-│   ├── silver/
-│   │   ├── 01_silver_orders.py
-│   │   ├── 02_silver_shipments.py
-│   │   ├── 03_silver_returns.py
-│   │   └── 04_silver_master_data.py
-│   │
-│   └── gold/
-│       ├── 01_dim_categories.py
-│       ├── 02_dim_brands.py
-│       ├── 03_dim_products.py
-│       ├── 04_dim_customers.py
-│       ├── 05_dim_date.py
-│       ├── 06_fact_order_items.py
-│       ├── 07_fact_order_shipments.py
-│       └── 08_fact_order_returns.py
-│
-├── src/
-│   ├── ingestion/
-│   │   ├── autoloader.py
-│   │   └── schema_utils.py
-│   │
-│   ├── transformations/
-│   │   ├── orders.py
-│   │   ├── shipments.py
-│   │   └── returns.py
-│   │
-│   └── utilities/
-│       ├── cdf_utils.py
-│       ├── merge_utils.py
-│       └── data_quality.py
-│
-├── config/
-│   ├── bronze_config.yml
-│   ├── silver_config.yml
-│   ├── gold_config.yml
-│   └── environment.yml
-│
-├── sql/
-│   ├── ddl/
-│   │   ├── bronze.sql
-│   │   ├── silver.sql
-│   │   └── gold.sql
-│   │
-│   └── validation/
-│       ├── data_quality.sql
-│       └── reconciliation.sql
-│
-├── powerbi/
-│   ├── ShopVista.pbix
-│   ├── data_model.md
-│   └── measures.md
-│
-├── tests/
-│   ├── unit/
-│   │   ├── test_transformations.py
-│   │   └── test_data_quality.py
-│   │
-│   └── integration/
-│       └── test_delta_pipeline.py
-│
-├── docs/
-│   ├── screenshots/
-│   │   ├── pipeline_overview.png
-│   │   ├── data_modeling_schema.png
-│   │   ├── databricks_sample_notebook.png
-│   │   ├── scd_implementation.png
-│   │   └── dashboard_overview.png
-│   │
-│   └── design/
-│       ├── medallion-architecture.md
-│       ├── data-model.md
-│       └── security.md
-│
-└── .gitignore
-```

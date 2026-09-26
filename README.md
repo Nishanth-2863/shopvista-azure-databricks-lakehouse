@@ -24,7 +24,7 @@
 
 
 > **Pipeline Screenshot**  
-> `docs/screenshots/pipeline_overview.png`
+> `Sample_images/Main Pipeline.png`
 
 ---
 
@@ -153,7 +153,7 @@ The Gold layer uses a normalized **Snowflake Schema** to reduce redundancy and s
 ```
 
 > **Snowflake Schema Screenshot**  
-> `docs/screenshots/data_modeling_schema.png`
+> `Sample_images/data_modelling.png`
 
 ### Gold Schema Directory
 
@@ -292,7 +292,7 @@ The pipeline uses:
 - `availableNow=True`
 
 > **Databricks Sample Notebook Screenshot**  
-> `docs/screenshots/databricks_sample_notebook.png`
+> `Sample_images/databricks_sample_notebook.png`
 
 > **SCD Implementation Screenshot**  
 > `docs/screenshots/scd_implementation.png`
@@ -421,7 +421,7 @@ Power BI consumes the **Gold Delta tables** to provide analytical reporting acro
 
 
 > **Power BI Dashboard Screenshot**  
-> `docs/screenshots/dashboard_overview.png`
+> `Sample_images/dashboard.png`
 
 ---
 

@@ -21,7 +21,7 @@
 
 ## End-to-End Architecture & Medallion Data Flow
 
->![Architecture](./Sample_images/architecture.png)
+>![Architecture](./Sample_images/shopvista.png)
 
 > **Pipeline Screenshot**  
 >![Main Pipeline](./Sample_images/Main_Pipeline.png)

@@ -152,8 +152,8 @@ The Gold layer uses a normalized **Snowflake Schema** to reduce redundancy and s
                                       └──────────────────────┘
 ```
 
-> **Snowflake Schema Screenshot**  
-> `Sample_images/data_modelling.png`
+> **Snowflake Schema Screenshot**
+> ![Data Modelling](./Sample_images/data_modelling.png) 
 
 ### Gold Schema Directory
 

@@ -295,7 +295,7 @@ The pipeline uses:
 > ![Databricks Notebook](./Sample_images/notebook.png)
 
 > **SCD Implementation Screenshot**  
-> `docs/screenshots/scd_implementation.png`
+> ![SCD ](./Sample_images/scd_1.png)
 
 ---
 
@@ -311,7 +311,7 @@ The pipeline uses:
 
 ### 3. SCD Type 1 `MERGE` with `foreachBatch`
 
-> ![SCD ](./Sample_images/scd_1.png)
+
 
 #### `availableNow=True`
 

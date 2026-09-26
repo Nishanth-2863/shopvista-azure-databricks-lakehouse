@@ -311,7 +311,7 @@ The pipeline uses:
 
 ### 3. SCD Type 1 `MERGE` with `foreachBatch`
 
-
+> ![SCD ](./Sample_images/scd_1.png)
 
 #### `availableNow=True`
 

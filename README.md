@@ -24,7 +24,7 @@
 
 
 > **Pipeline Screenshot**  
-> `Sample_images/Main Pipeline.png`
+> `Sample_images/data_modelling.png`
 
 ---
 

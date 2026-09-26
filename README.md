@@ -21,10 +21,10 @@
 
 ## End-to-End Architecture & Medallion Data Flow
 
-
+>![Architecture](./Sample_images/architecture.png)
 
 > **Pipeline Screenshot**  
->![Main Pipeline](./Sample_images/Main_pipeline.png)
+>![Main Pipeline](./Sample_images/Main_Pipeline.png)
 
 ---
 

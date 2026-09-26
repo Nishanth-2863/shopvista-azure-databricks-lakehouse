@@ -24,7 +24,7 @@
 
 
 > **Pipeline Screenshot**  
-> `Sample_images/data_modelling.png`
+>![Main Pipeline](./Sample_images/Main_pipeline.png)
 
 ---
 
@@ -292,7 +292,7 @@ The pipeline uses:
 - `availableNow=True`
 
 > **Databricks Sample Notebook Screenshot**  
-> `Sample_images/databricks_sample_notebook.png`
+> ![Databricks Notebook](./Sample_images/notebook.png)
 
 > **SCD Implementation Screenshot**  
 > `docs/screenshots/scd_implementation.png`
@@ -421,7 +421,7 @@ Power BI consumes the **Gold Delta tables** to provide analytical reporting acro
 
 
 > **Power BI Dashboard Screenshot**  
-> `Sample_images/dashboard.png`
+> ![Powerbi Dashboard](./Sample_images/dashboard.png)
 
 ---
 
